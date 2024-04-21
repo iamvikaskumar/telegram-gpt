@@ -1,32 +1,28 @@
 package config
 
 import (
-	"log"
-	"os"
-
-	yaml "gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
 	TelegramToken string `yaml:"telegramToken"`
+	GptToken      string `mapstucture:"gptToken"`
 }
 
-var config Config
+func LoadConfig(path string) (c *Config, err error) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(path)
+	viper.AutomaticEnv()
+	err = viper.ReadInConfig()
 
-func GetConfig() *Config {
-	return &config
-}
-
-func init() {
-	fileBytes, err := os.ReadFile("config.yaml")
 	if err != nil {
-		log.Fatal("error reading confiog file...")
+		return
 	}
 
-	ret := &Config{}
-	err = yaml.Unmarshal(fileBytes, ret)
+	err = viper.Unmarshal(&c)
 	if err != nil {
-		log.Fatal("error getting config...")
+		return
 	}
-	config = *ret
+	return
 }

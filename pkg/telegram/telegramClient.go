@@ -1,101 +1,66 @@
 package telegram
 
 import (
+	"context"
 	"log"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/iamvikaskumar/telegram-gpt/config"
+	"github.com/iamvikaskumar/telegram-gpt/pkg/gpt"
 )
 
 const (
 	topicPrefix  = "/topic"
 	phrasePrefix = "/phrase"
+	gptPrefix    = "/ask_gpt"
 )
 
 type Client struct {
 	*tgbotapi.BotAPI
+	GptClient *gpt.GPT
 }
 
 // NewClient creates a client that uses the given RPC client.
 
-// func NewClient(c *rpc.Client) *Client {
-func NewClient(token string) *Client {
+func NewClient(token string, gptClient *gpt.GPT) *Client {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Panic(err)
 	}
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
-	return &Client{bot}
-}
-
-func GetClient() {
-	token := config.GetConfig().TelegramToken
-	bot, err := tgbotapi.NewBotAPI(token)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	bot.Debug = true
-
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-	updates := bot.GetUpdatesChan(u)
-
-	for update := range updates {
-		if update.Message != nil {
-			// check if message has '/topic' or '/phrase' as prefix
-			if !strings.HasPrefix(update.Message.Text, topicPrefix) && !strings.HasPrefix(update.Message.Text, phrasePrefix) {
-				continue
-			}
-			var msg tgbotapi.MessageConfig
-			if strings.HasPrefix(update.Message.Text, topicPrefix) {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "you asked a topic...")
-				msg.ReplyToMessageID = update.Message.MessageID
-			} else {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "you asked a phrase...")
-				msg.ReplyToMessageID = update.Message.MessageID
-			}
-
-			// msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-			// msg.ReplyToMessageID = update.Message.MessageID
-
-			bot.Send(msg)
-		}
-	}
+	return &Client{bot, gptClient}
 }
 
 func (c *Client) Listen() {
+	ctx := context.Background()
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
 	updates := c.GetUpdatesChan(u)
-
+	var prompt string
 	for update := range updates {
+
 		if update.Message != nil {
-			// check if message has '/topic' or '/phrase' as prefix
-			if !strings.HasPrefix(update.Message.Text, topicPrefix) && !strings.HasPrefix(update.Message.Text, phrasePrefix) {
-				continue
-			}
 			var msg tgbotapi.MessageConfig
-			if strings.HasPrefix(update.Message.Text, topicPrefix) {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "you asked a topic...")
-				msg.ReplyToMessageID = update.Message.MessageID
+			// check if message has '/topic' or '/phrase' as prefix
+			if !strings.HasPrefix(update.Message.Text, gptPrefix) {
+				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "invalid command. Please use command /ask_gpt followed by your question")
 			} else {
-				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "you asked a phrase...")
-				msg.ReplyToMessageID = update.Message.MessageID
+				prompt = strings.TrimPrefix(update.Message.Text, gptPrefix)
+				if prompt == "" {
+					msg = tgbotapi.NewMessage(update.Message.Chat.ID, "please type a question")
+				} else {
+					res, err := c.GptClient.GetReponse(ctx, prompt)
+					if err != nil {
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "error generating reponse...")
+					} else {
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, res)
+					}
+				}
 			}
+			msg.ReplyToMessageID = update.Message.MessageID
 			c.Send(msg)
 		}
 	}
-}
-
-func (c *Client) SendMesage(messageID int, chatID int64, message string) {
-	msg := tgbotapi.NewMessage(chatID, message)
-	//msg.ReplyToMessageID = messageID
-	c.Send(msg)
 }

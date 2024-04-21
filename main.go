@@ -2,11 +2,23 @@ package main
 
 import (
 	"github.com/iamvikaskumar/telegram-gpt/config"
+	"github.com/iamvikaskumar/telegram-gpt/pkg/gpt"
 	"github.com/iamvikaskumar/telegram-gpt/pkg/telegram"
 )
 
 func main() {
-	token := config.GetConfig().TelegramToken
-	telegramClient := telegram.NewClient(token)
-	telegramClient.SendMesage(17, 6880161489, "kite baje sona hai ?")
+	config, err := config.LoadConfig(".")
+
+	if err != nil {
+		panic("error loading config...")
+	}
+
+	gptClient := gpt.GetClient(config.GptToken)
+
+	if err != nil {
+		panic("error getting response from chat gpt")
+	}
+
+	telegramClient := telegram.NewClient(config.TelegramToken, gptClient)
+	telegramClient.Listen()
 }
