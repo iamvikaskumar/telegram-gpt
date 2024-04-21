@@ -5,7 +5,7 @@ import (
 )
 
 type Config struct {
-	TelegramToken string `yaml:"telegramToken"`
+	TelegramToken string `mapstucture:"telegramToken"`
 	GptToken      string `mapstucture:"gptToken"`
 }
 
